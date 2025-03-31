@@ -16,10 +16,17 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  reactStrictMode: true,
+  swcMinify: true,
   experimental: {
     webpackBuildWorker: true,
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
+  },
+  webpack: (config) => {
+    // Fix CSS Modules Support with Tailwind
+    config.resolve.fallback = { fs: false, module: false };
+    return config;
   },
 }
 
