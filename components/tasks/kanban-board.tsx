@@ -12,7 +12,9 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent
+  DragEndEvent,
+  DragStartEvent,
+  DragOverEvent
 } from "@dnd-kit/core"
 import {
   SortableContext,
@@ -20,9 +22,10 @@ import {
   verticalListSortingStrategy,
   useSortable
 } from "@dnd-kit/sortable"
+import { arrayMove } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
-// Typy danych
+// Definicje typów
 interface Task {
   id: string
   title: string
@@ -35,8 +38,28 @@ interface Task {
   dueDate?: string
 }
 
+// Nowa struktura danych dla tablicy Kanban
+interface Column {
+  id: string
+  title: string
+  status: "Do zrobienia" | "W trakcie" | "Zrobione"
+}
+
+interface KanbanData {
+  tasks: {
+    [key: string]: Task
+  }
+  columns: {
+    [key: string]: Column
+  }
+  columnOrder: string[]
+  tasksByColumn: {
+    [columnId: string]: string[]
+  }
+}
+
 // Komponent pojedynczego zadania
-const TaskCard = ({ task }: { task: Task }) => {
+const TaskCard = ({ id, task }: { id: string, task: Task }) => {
   const {
     attributes,
     listeners,
@@ -44,7 +67,7 @@ const TaskCard = ({ task }: { task: Task }) => {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id })
+  } = useSortable({ id })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -89,18 +112,22 @@ const TaskCard = ({ task }: { task: Task }) => {
 }
 
 // Komponent kolumny Kanban
-const KanbanColumn = ({ title, tasks }: { title: string, tasks: Task[] }) => {
+const KanbanColumn = ({ column, taskIds, tasks }: { 
+  column: Column, 
+  taskIds: string[], 
+  tasks: { [key: string]: Task } 
+}) => {
   return (
-    <div className="min-w-72 rounded-lg">
+    <div className="min-w-72 rounded-lg bg-muted/20 p-4">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <Badge variant="outline">{tasks.length}</Badge>
+        <h2 className="text-lg font-semibold">{column.title}</h2>
+        <Badge variant="outline">{taskIds.length}</Badge>
       </div>
 
-      <SortableContext items={tasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-3">
-          {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
+      <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+        <div className="space-y-3 min-h-[200px]">
+          {taskIds.map((taskId) => (
+            <TaskCard key={taskId} id={taskId} task={tasks[taskId]} />
           ))}
         </div>
       </SortableContext>
@@ -144,9 +171,52 @@ const initialTasks: Task[] = [
   }
 ]
 
+// Utworzenie początkowej struktury danych
+const getInitialData = (tasks: Task[]): KanbanData => {
+  // Definicje kolumn
+  const columns = {
+    'column-1': { id: 'column-1', title: 'Do zrobienia', status: 'Do zrobienia' as const },
+    'column-2': { id: 'column-2', title: 'W trakcie', status: 'W trakcie' as const },
+    'column-3': { id: 'column-3', title: 'Zrobione', status: 'Zrobione' as const },
+  }
+  
+  const columnOrder = ['column-1', 'column-2', 'column-3']
+
+  // Inicjalizacja tasksByColumn
+  const tasksByColumn: { [columnId: string]: string[] } = {
+    'column-1': [],
+    'column-2': [],
+    'column-3': [],
+  }
+
+  // Konwersja tablicy zadań na obiekt i przypisanie do odpowiednich kolumn
+  const tasksById: { [key: string]: Task } = {}
+  
+  tasks.forEach(task => {
+    tasksById[task.id] = task
+    
+    // Przypisanie zadania do odpowiedniej kolumny na podstawie statusu
+    if (task.status === 'Do zrobienia') {
+      tasksByColumn['column-1'].push(task.id)
+    } else if (task.status === 'W trakcie') {
+      tasksByColumn['column-2'].push(task.id)
+    } else if (task.status === 'Zrobione') {
+      tasksByColumn['column-3'].push(task.id)
+    }
+  })
+
+  return {
+    tasks: tasksById,
+    columns,
+    columnOrder,
+    tasksByColumn
+  }
+}
+
 // Główny komponent tablicy Kanban
 export function KanbanBoard() {
-  const [tasks, setTasks] = useState(initialTasks)
+  const [kanbanData, setKanbanData] = useState<KanbanData>(getInitialData(initialTasks))
+  const [activeId, setActiveId] = useState<string | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -159,43 +229,150 @@ export function KanbanBoard() {
     })
   )
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-
-    if (over && active.id !== over.id) {
-      setTasks(tasks => {
-        const oldIndex = tasks.findIndex(t => t.id === active.id)
-        const newIndex = tasks.findIndex(t => t.id === over.id)
-        
-        if (oldIndex === -1 || newIndex === -1) return tasks
-        
-        const activeTask = tasks[oldIndex]
-        const overTask = tasks[newIndex]
-        
-        // Zmiana statusu zadania na status kolumny docelowej
-        return tasks.map(task => 
-          task.id === active.id 
-            ? { ...task, status: overTask.status } 
-            : task
-        )
-      })
-    }
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string)
   }
 
-  const getColumnTasks = (status: string) => {
-    return tasks.filter(task => task.status === status)
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event
+    
+    if (!over) return
+    
+    const activeId = active.id as string
+    const overId = over.id as string
+    
+    // Znajdź, do której kolumny należy zadanie
+    let sourceColumnId: string | null = null
+    let destinationColumnId: string | null = null
+    
+    // Znajdź kolumnę źródłową
+    Object.entries(kanbanData.tasksByColumn).forEach(([columnId, taskIds]) => {
+      if (taskIds.includes(activeId)) {
+        sourceColumnId = columnId
+      }
+    })
+    
+    // Znajdź kolumnę docelową - może to być zadanie lub kolumna
+    const isOverATask = Object.values(kanbanData.tasks).some(task => task.id === overId)
+    
+    if (isOverATask) {
+      // Sprawdź, w której kolumnie jest to zadanie
+      Object.entries(kanbanData.tasksByColumn).forEach(([columnId, taskIds]) => {
+        if (taskIds.includes(overId)) {
+          destinationColumnId = columnId
+        }
+      })
+    } else {
+      // Over jest bezpośrednio kolumną
+      destinationColumnId = overId
+    }
+    
+    // Jeśli nie znaleziono którejś z kolumn lub są takie same, zakończ
+    if (!sourceColumnId || !destinationColumnId || sourceColumnId === destinationColumnId) {
+      return
+    }
+    
+    // Aktualizacja stanu
+    setKanbanData(prev => {
+      const sourceTaskIds = [...prev.tasksByColumn[sourceColumnId!]]
+      const destTaskIds = [...prev.tasksByColumn[destinationColumnId!]]
+      
+      // Usuń zadanie z kolumny źródłowej
+      const sourceIndex = sourceTaskIds.indexOf(activeId)
+      sourceTaskIds.splice(sourceIndex, 1)
+      
+      // Dodaj do kolumny docelowej
+      destTaskIds.push(activeId)
+      
+      // Aktualizuj status zadania na podstawie kolumny docelowej
+      const newTasks = {
+        ...prev.tasks,
+        [activeId]: {
+          ...prev.tasks[activeId],
+          status: prev.columns[destinationColumnId!].status
+        }
+      }
+      
+      return {
+        ...prev,
+        tasks: newTasks,
+        tasksByColumn: {
+          ...prev.tasksByColumn,
+          [sourceColumnId!]: sourceTaskIds,
+          [destinationColumnId!]: destTaskIds
+        }
+      }
+    })
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    
+    if (!over) {
+      setActiveId(null)
+      return
+    }
+    
+    const activeId = active.id as string
+    const overId = over.id as string
+    
+    // Znajdź kolumnę, do której należy zadanie
+    let columnId: string | null = null
+    
+    Object.entries(kanbanData.tasksByColumn).forEach(([colId, taskIds]) => {
+      if (taskIds.includes(activeId)) {
+        columnId = colId
+      }
+    })
+    
+    if (!columnId) {
+      setActiveId(null)
+      return
+    }
+    
+    // Jeśli przeciągnięto zadanie na inne zadanie w tej samej kolumnie, zmień kolejność
+    if (activeId !== overId && kanbanData.tasksByColumn[columnId].includes(overId)) {
+      const oldIndex = kanbanData.tasksByColumn[columnId].indexOf(activeId)
+      const newIndex = kanbanData.tasksByColumn[columnId].indexOf(overId)
+      
+      setKanbanData(prev => {
+        const newTaskIds = arrayMove(prev.tasksByColumn[columnId], oldIndex, newIndex)
+        
+        return {
+          ...prev,
+          tasksByColumn: {
+            ...prev.tasksByColumn,
+            [columnId]: newTaskIds
+          }
+        }
+      })
+    }
+    
+    setActiveId(null)
   }
 
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KanbanColumn title="Do zrobienia" tasks={getColumnTasks("Do zrobienia")} />
-        <KanbanColumn title="W trakcie" tasks={getColumnTasks("W trakcie")} />
-        <KanbanColumn title="Zrobione" tasks={getColumnTasks("Zrobione")} />
+        {kanbanData.columnOrder.map(columnId => {
+          const column = kanbanData.columns[columnId]
+          const taskIds = kanbanData.tasksByColumn[columnId]
+          
+          return (
+            <KanbanColumn 
+              key={columnId} 
+              column={column} 
+              taskIds={taskIds} 
+              tasks={kanbanData.tasks} 
+            />
+          )
+        })}
       </div>
     </DndContext>
   )
