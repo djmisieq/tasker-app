@@ -1,39 +1,41 @@
 "use client"
 
-import Link from "next/link"
-import { LogOut, Settings, User } from "lucide-react"
-
+import { useUser } from "@/contexts/user-context"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useUser } from "@/contexts/user-context"
+import { getInitials } from "@/lib/utils"
 
 export function UserNav() {
-  const { user, setUser } = useUser()
+  const { user, logout } = useUser()
 
-  if (!user) return null
-
-  const handleSignOut = () => {
-    // W rzeczywistej aplikacji, wysłalibyśmy żądanie wylogowania do API
-    setUser(null)
+  if (!user) {
+    return null
   }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Avatar className="h-8 w-8 cursor-pointer">
-          <AvatarImage src={user.avatar} alt={user.name} />
-          <AvatarFallback>{user.initials}</AvatarFallback>
-        </Avatar>
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+          <Avatar className="h-8 w-8">
+            {user.image ? (
+              <AvatarImage src={user.image} alt={user.name} />
+            ) : (
+              <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+            )}
+          </Avatar>
+        </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end">
-        <DropdownMenuLabel>
+      <DropdownMenuContent className="w-56" align="end" forceMount>
+        <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{user.name}</p>
             <p className="text-xs leading-none text-muted-foreground">
@@ -42,22 +44,17 @@ export function UserNav() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/profile">
-            <User className="mr-2 h-4 w-4" />
-            <span>Profil</span>
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/settings">
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Ustawienia</span>
-          </Link>
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuItem>
+            Profil
+          </DropdownMenuItem>
+          <DropdownMenuItem>
+            Ustawienia
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut}>
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Wyloguj</span>
+        <DropdownMenuItem onClick={logout}>
+          Wyloguj się
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
