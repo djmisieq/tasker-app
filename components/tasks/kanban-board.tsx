@@ -8,17 +8,17 @@ import { CalendarIcon } from "lucide-react"
 import { 
   DndContext, 
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent
+  DragEndEvent,
+  PointerSensor,
+  KeyboardSensor
 } from "@dnd-kit/core"
 import {
   SortableContext,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable
+  useSortable,
+  verticalListSortingStrategy
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
@@ -89,13 +89,9 @@ const TaskCard = ({ task }: { task: Task }) => {
 }
 
 // Komponent kolumny Kanban
-const KanbanColumn = ({ title, tasks, columnStatus }: { 
-  title: string, 
-  tasks: Task[], 
-  columnStatus: "Do zrobienia" | "W trakcie" | "Zrobione" 
-}) => {
+const KanbanColumn = ({ title, tasks }: { title: string, tasks: Task[] }) => {
   return (
-    <div className="min-w-72 rounded-lg bg-muted/20 p-4">
+    <div className="min-w-72 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">{title}</h2>
         <Badge variant="outline">{tasks.length}</Badge>
@@ -105,7 +101,7 @@ const KanbanColumn = ({ title, tasks, columnStatus }: {
         items={tasks.map(task => task.id)} 
         strategy={verticalListSortingStrategy}
       >
-        <div className="space-y-3 min-h-[200px]">
+        <div className="space-y-3 min-h-[150px]">
           {tasks.map((task) => (
             <TaskCard key={task.id} task={task} />
           ))}
@@ -166,56 +162,40 @@ export function KanbanBoard() {
     })
   )
 
-  // Usprawniona funkcja handleDragEnd
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
 
+    // Jeśli nie ma elementu docelowego, przerywamy
     if (!over) return
-    
-    const activeId = active.id as string
-    const overId = over.id as string
-    
+
+    const draggedTaskId = active.id as string
+    const overTaskId = over.id as string
+
+    // Jeśli przeciągamy nad tym samym elementem, nie robimy nic
+    if (draggedTaskId === overTaskId) return
+
     // Znajdź zadanie, które jest przeciągane
-    const draggedTask = tasks.find(task => task.id === activeId)
+    const draggedTask = tasks.find(task => task.id === draggedTaskId)
     if (!draggedTask) return
+
+    // Znajdź zadanie, nad którym upuszczamy (jeśli takie istnieje)
+    const overTask = tasks.find(task => task.id === overTaskId)
     
-    // Określ docelową kolumnę na podstawie zadania, nad którym upuszczono
-    let targetStatus = draggedTask.status // Domyślnie nie zmieniamy statusu
-    
-    // Sprawdź, czy upuszczono na inne zadanie
-    const overTask = tasks.find(task => task.id === overId)
-    if (overTask) {
-      // Upuszczono na zadanie - więc używamy statusu z tego zadania
-      targetStatus = overTask.status
-    } else {
-      // Najprawdopodobniej upuszczono bezpośrednio na kolumnę
-      // W tym przypadku musimy jakoś określić, która to kolumna
-      console.log("Upuszczono na kolumnę - będziemy potrzebować dodatkowej logiki")
-      
-      // W naszym przypadku overId może reprezentować kolumnę
-      // Możemy określić status na podstawie ID kolumny
-      if (overId === "column-1") {
-        targetStatus = "Do zrobienia"
-      } else if (overId === "column-2") {
-        targetStatus = "W trakcie"
-      } else if (overId === "column-3") {
-        targetStatus = "Zrobione"
-      }
-    }
-    
-    // Jeśli status się zmienił, aktualizujemy zadanie
-    if (draggedTask.status !== targetStatus) {
+    // Jeśli znaleźliśmy zadanie docelowe, używamy jego statusu
+    // W przeciwnym razie (np. przeciąganie bezpośrednio na kolumnę) 
+    // status się nie zmienia
+    if (overTask && draggedTask.status !== overTask.status) {
       setTasks(currentTasks => 
         currentTasks.map(task => 
-          task.id === activeId
-            ? { ...task, status: targetStatus }
+          task.id === draggedTaskId 
+            ? { ...task, status: overTask.status } 
             : task
         )
       )
     }
   }
 
-  const getColumnTasks = (status: "Do zrobienia" | "W trakcie" | "Zrobione") => {
+  const getColumnTasks = (status: string) => {
     return tasks.filter(task => task.status === status)
   }
 
@@ -226,21 +206,9 @@ export function KanbanBoard() {
       onDragEnd={handleDragEnd}
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KanbanColumn 
-          title="Do zrobienia" 
-          tasks={getColumnTasks("Do zrobienia")} 
-          columnStatus="Do zrobienia" 
-        />
-        <KanbanColumn 
-          title="W trakcie" 
-          tasks={getColumnTasks("W trakcie")} 
-          columnStatus="W trakcie" 
-        />
-        <KanbanColumn 
-          title="Zrobione" 
-          tasks={getColumnTasks("Zrobione")} 
-          columnStatus="Zrobione" 
-        />
+        <KanbanColumn title="Do zrobienia" tasks={getColumnTasks("Do zrobienia")} />
+        <KanbanColumn title="W trakcie" tasks={getColumnTasks("W trakcie")} />
+        <KanbanColumn title="Zrobione" tasks={getColumnTasks("Zrobione")} />
       </div>
     </DndContext>
   )
