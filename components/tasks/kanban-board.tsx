@@ -1,10 +1,10 @@
 "use client"
 
 import React, { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Card, CardContent } from "@/components/ui/card"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, MoreHorizontal } from "lucide-react"
+import { CalendarIcon } from "lucide-react"
 import { 
   DndContext, 
   closestCenter,
@@ -12,8 +12,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent,
-  DragOverlay
+  DragEndEvent
 } from "@dnd-kit/core"
 import {
   SortableContext,
@@ -21,30 +20,23 @@ import {
   verticalListSortingStrategy,
   useSortable
 } from "@dnd-kit/sortable"
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import { CSS } from "@dnd-kit/utilities"
 
 // Typy danych
 interface Task {
   id: string
   title: string
-  description?: string
   priority: "Wysoki" | "Średni" | "Niski"
   status: "Do zrobienia" | "W trakcie" | "Zrobione"
   assignee: {
     name: string
-    avatar?: string
     initials: string
   }
   dueDate?: string
 }
 
 // Komponent pojedynczego zadania
-const TaskCard = ({
-  task,
-}: {
-  task: Task
-}) => {
+const TaskCard = ({ task }: { task: Task }) => {
   const {
     attributes,
     listeners,
@@ -58,12 +50,6 @@ const TaskCard = ({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-  }
-
-  const priorityColorMap = {
-    "Wysoki": "bg-red-500",
-    "Średni": "bg-yellow-500",
-    "Niski": "bg-green-500",
   }
 
   return (
@@ -82,14 +68,9 @@ const TaskCard = ({
           </Badge>
         </div>
         
-        {task.description && (
-          <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
-        )}
-        
         <div className="flex justify-between items-center mt-3">
           <div className="flex items-center gap-2">
             <Avatar className="h-6 w-6">
-              <AvatarImage src={task.assignee.avatar} alt={task.assignee.name} />
               <AvatarFallback className="text-xs">{task.assignee.initials}</AvatarFallback>
             </Avatar>
             <span className="text-xs text-muted-foreground">{task.assignee.name}</span>
@@ -108,13 +89,7 @@ const TaskCard = ({
 }
 
 // Komponent kolumny Kanban
-const KanbanColumn = ({
-  title,
-  tasks,
-}: {
-  title: string
-  tasks: Task[]
-}) => {
+const KanbanColumn = ({ title, tasks }: { title: string, tasks: Task[] }) => {
   return (
     <div className="min-w-72 rounded-lg">
       <div className="flex items-center justify-between mb-4">
@@ -166,35 +141,12 @@ const initialTasks: Task[] = [
       initials: "JK"
     },
     dueDate: "15 mar"
-  },
-  {
-    id: "task-4",
-    title: "Skonfigurować deployment",
-    description: "Ustawić CI/CD pipeline",
-    priority: "Wysoki",
-    status: "Do zrobienia",
-    assignee: {
-      name: "Anna Nowak",
-      initials: "AN"
-    },
-    dueDate: "22 mar"
-  },
-  {
-    id: "task-5",
-    title: "Napisać testy",
-    priority: "Średni",
-    status: "W trakcie",
-    assignee: {
-      name: "Piotr Wiśniewski",
-      initials: "PW"
-    }
-  },
+  }
 ]
 
 // Główny komponent tablicy Kanban
 export function KanbanBoard() {
   const [tasks, setTasks] = useState(initialTasks)
-  const [activeId, setActiveId] = useState<string | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -207,23 +159,20 @@ export function KanbanBoard() {
     })
   )
 
-  const handleDragStart = (event: any) => {
-    setActiveId(event.active.id)
-  }
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
 
     if (over && active.id !== over.id) {
       setTasks(tasks => {
-        const activeTask = tasks.find(t => t.id === active.id)
-        if (!activeTask) return tasks
+        const oldIndex = tasks.findIndex(t => t.id === active.id)
+        const newIndex = tasks.findIndex(t => t.id === over.id)
         
-        // Znajdujemy zadanie, nad którym zakończyliśmy przeciąganie
-        const overTask = tasks.find(t => t.id === over.id)
-        if (!overTask) return tasks
+        if (oldIndex === -1 || newIndex === -1) return tasks
         
-        // Zmieniamy status zadania na status kolumny docelowej
+        const activeTask = tasks[oldIndex]
+        const overTask = tasks[newIndex]
+        
+        // Zmiana statusu zadania na status kolumny docelowej
         return tasks.map(task => 
           task.id === active.id 
             ? { ...task, status: overTask.status } 
@@ -231,37 +180,23 @@ export function KanbanBoard() {
         )
       })
     }
-
-    setActiveId(null)
   }
 
   const getColumnTasks = (status: string) => {
     return tasks.filter(task => task.status === status)
   }
 
-  const activeTask = activeId ? tasks.find(task => task.id === activeId) : null
-
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      modifiers={[restrictToVerticalAxis]}
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <KanbanColumn title="Do zrobienia" tasks={getColumnTasks("Do zrobienia")} />
         <KanbanColumn title="W trakcie" tasks={getColumnTasks("W trakcie")} />
         <KanbanColumn title="Zrobione" tasks={getColumnTasks("Zrobione")} />
       </div>
-
-      <DragOverlay>
-        {activeId && activeTask ? (
-          <div className="w-72">
-            <TaskCard task={activeTask} />
-          </div>
-        ) : null}
-      </DragOverlay>
     </DndContext>
   )
 }
