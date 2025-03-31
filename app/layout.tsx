@@ -14,7 +14,7 @@ const inter = Inter({ subsets: ["latin", "latin-ext"] })
 export const metadata: Metadata = {
   title: "Tasker - Zarządzanie zadaniami, projektami i spotkaniami",
   description: "Nowoczesna aplikacja do zarządzania zadaniami, projektami i spotkaniami",
-    generator: 'v0.dev'
+  generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -41,5 +41,3 @@ export default function RootLayout({
     </html>
   )
 }
-
-import './globals.css'
