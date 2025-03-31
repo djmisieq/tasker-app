@@ -1,53 +1,97 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import React, { createContext, useContext, useState, useEffect } from "react"
 
-export interface User {
+// Definiowanie typu użytkownika
+interface User {
   id: string
   name: string
   email: string
-  avatar: string
-  initials: string
-  role: string
+  image?: string
+  role: "admin" | "user"
 }
 
+// Definiowanie typów dla kontekstu
 interface UserContextType {
   user: User | null
   isLoading: boolean
-  setUser: (user: User | null) => void
+  login: (email: string, password: string) => Promise<boolean>
+  logout: () => void
 }
 
+// Tworzenie kontekstu
 const UserContext = createContext<UserContextType | undefined>(undefined)
 
-export function UserProvider({ children }: { children: ReactNode }) {
+// Mock danych użytkownika
+const mockUser: User = {
+  id: "user-1",
+  name: "Jan Kowalski",
+  email: "jan.kowalski@example.com",
+  role: "admin",
+}
+
+// Provider kontekstu
+export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Symulacja sprawdzania sesji użytkownika przy ładowaniu
   useEffect(() => {
-    // Symulacja ładowania danych użytkownika
-    const loadUser = async () => {
-      // W rzeczywistej aplikacji, pobieralibyśmy dane z API
-      // Tutaj symulujemy opóźnienie i zwracamy dane testowe
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      setUser({
-        id: "user-1",
-        name: "Jan Kowalski",
-        email: "jan.kowalski@example.com",
-        avatar: "/placeholder.svg?height=32&width=32",
-        initials: "JK",
-        role: "Project Manager",
-      })
-
-      setIsLoading(false)
+    const checkUserSession = async () => {
+      try {
+        // W przyszłości tutaj będzie API call do backendu
+        // Aktualnie używamy lokalnego storage jako symulacji
+        const savedUser = localStorage.getItem("user")
+        
+        if (savedUser) {
+          setUser(JSON.parse(savedUser))
+        } else {
+          // Dla celów demonstracyjnych automatycznie logujemy użytkownika
+          setUser(mockUser)
+          localStorage.setItem("user", JSON.stringify(mockUser))
+        }
+      } catch (error) {
+        console.error("Błąd sprawdzania sesji:", error)
+      } finally {
+        setIsLoading(false)
+      }
     }
 
-    loadUser()
+    checkUserSession()
   }, [])
 
-  return <UserContext.Provider value={{ user, isLoading, setUser }}>{children}</UserContext.Provider>
+  // Funkcja logowania
+  const login = async (email: string, password: string): Promise<boolean> => {
+    setIsLoading(true)
+    
+    try {
+      // Tutaj w przyszłości będzie rzeczywiste logowanie
+      // Aktualnie akceptujemy wszystkie dane
+      setUser(mockUser)
+      localStorage.setItem("user", JSON.stringify(mockUser))
+      return true
+    } catch (error) {
+      console.error("Błąd logowania:", error)
+      return false
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Funkcja wylogowania
+  const logout = () => {
+    setUser(null)
+    localStorage.removeItem("user")
+  }
+
+  return (
+    <UserContext.Provider value={{ user, isLoading, login, logout }}>
+      {children}
+    </UserContext.Provider>
+  )
 }
 
+// Hook do korzystania z kontekstu
 export function useUser() {
   const context = useContext(UserContext)
   if (context === undefined) {
